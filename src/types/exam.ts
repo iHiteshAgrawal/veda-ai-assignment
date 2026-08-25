@@ -33,7 +33,8 @@ export interface Question {
   /** Parent number for a labelled sub-part, e.g. "11" for question "11(a)". */
   parentNumber: string | null;
   text: string;
-  box: NormalizedBox;
+  /** Null when the model returned an unusable box for this question. */
+  box: NormalizedBox | null;
 }
 
 export interface AnswerBlock {

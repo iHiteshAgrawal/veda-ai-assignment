@@ -10,12 +10,14 @@ export function AnswerSheetPanel({
   onPageChange,
   highlightBoxes,
   highlightLabel,
+  notice,
 }: {
   pages: SourcePage[];
   currentPageIndex: number;
   onPageChange: (index: number) => void;
   highlightBoxes: NormalizedBox[];
   highlightLabel: string | null;
+  notice: string | null;
 }) {
   const [zoom, setZoom] = useState(100);
   const page = pages[currentPageIndex];
@@ -58,6 +60,10 @@ export function AnswerSheetPanel({
           </div>
         </div>
       </div>
+
+      {notice && (
+        <p className="bg-warning-soft px-4 py-2 text-xs font-medium text-warning">{notice}</p>
+      )}
 
       <div className="flex-1 overflow-auto bg-neutral-200 p-4">
         {page ? (

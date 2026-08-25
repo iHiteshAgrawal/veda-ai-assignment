@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AnswerSheetPanel } from "@/components/AnswerSheetPanel";
 import { QuestionCard } from "@/components/QuestionCard";
+import { normalizeAnswerBoxes } from "@/lib/boxes";
 import type { ExamSession } from "@/types/exam";
 
 export default function ExamResultPage() {
@@ -26,7 +27,12 @@ export default function ExamResultPage() {
         setNotFound(true);
         return;
       }
-      setSession(data);
+      // Re-normalize on read: sessions stored before box validation existed can
+      // still hold incomplete coordinates, which would render as NaN CSS.
+      setSession({
+        ...data,
+        answers: data.answers.map((a) => ({ ...a, boxes: normalizeAnswerBoxes(a.boxes) })),
+      });
       setSelectedQuestionId(data.questions[0]?.id ?? null);
     });
   }, [id]);
@@ -137,6 +143,14 @@ export default function ExamResultPage() {
     </div>
   );
 
+  const highlightNotice = !selectedQuestion
+    ? null
+    : selectedMapping?.status === "unanswered"
+      ? `${selectedQuestion.number} was left unanswered — nothing to highlight.`
+      : selectedAnswer && selectedAnswer.boxes.length === 0
+        ? `Found the answer to ${selectedQuestion.number}, but couldn't locate it on the sheet.`
+        : null;
+
   const answersPanel = (
     <AnswerSheetPanel
       pages={session.answerSheetPages}
@@ -144,6 +158,7 @@ export default function ExamResultPage() {
       onPageChange={setCurrentPageIndex}
       highlightBoxes={selectedAnswer?.boxes ?? []}
       highlightLabel={selectedQuestion ? selectedQuestion.number : null}
+      notice={highlightNotice}
     />
   );
 

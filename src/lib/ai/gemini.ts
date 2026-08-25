@@ -6,6 +6,8 @@ import type {
   Question,
   SourcePage,
 } from "@/types/exam";
+import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
+import { reconcileGrading, reconcileMappings } from "./reconcile";
 import {
   ANSWER_EXTRACTION_PROMPT,
   QUESTION_EXTRACTION_PROMPT,
@@ -14,9 +16,12 @@ import {
   mappingPrompt,
 } from "./prompts";
 
-// Override via GEMINI_MODEL if this model's free-tier quota runs out or its
-// quality doesn't hold up — no code change needed, just an env var.
-const MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
+// Not the cheaper gemini-flash-lite-latest: that model ignored the required
+// bounding-box schema, omitting `yMin` on 5 of 6 boxes, which leaves answers
+// with no usable highlight region. A tighter free-tier quota beats data the
+// UI can't render. Override via GEMINI_MODEL, or switch providers entirely
+// with AI_PROVIDER=openrouter when this quota runs out.
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
@@ -125,7 +130,11 @@ export async function extractQuestions(pages: SourcePage[]): Promise<Question[]>
     schema
   );
 
-  return parsed.questions.map((q) => ({ id: crypto.randomUUID(), ...q }));
+  return parsed.questions.map((q) => ({
+    ...q,
+    id: crypto.randomUUID(),
+    box: sanitizeBoxes([q.box])[0] ?? null,
+  }));
 }
 
 export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {
@@ -161,7 +170,11 @@ export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]
     schema
   );
 
-  return parsed.answers.map((a) => ({ id: crypto.randomUUID(), ...a }));
+  return parsed.answers.map((a) => ({
+    ...a,
+    id: crypto.randomUUID(),
+    boxes: normalizeAnswerBoxes(a.boxes),
+  }));
 }
 
 export async function mapAnswersToQuestions(
@@ -193,7 +206,7 @@ export async function mapAnswersToQuestions(
     [{ text: mappingPrompt(questions, answers) }],
     schema
   );
-  return parsed.mappings;
+  return reconcileMappings(questions, answers, parsed.mappings);
 }
 
 export async function gradeAnswers(
@@ -226,5 +239,5 @@ export async function gradeAnswers(
   };
 
   const prompt = gradingPrompt(byQuestionForGrading(questions, answers, mappings));
-  return generateJson<GradingSummary>([{ text: prompt }], schema);
+  return reconcileGrading(questions, await generateJson<GradingSummary>([{ text: prompt }], schema));
 }

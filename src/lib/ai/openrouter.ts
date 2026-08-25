@@ -5,6 +5,8 @@ import type {
   Question,
   SourcePage,
 } from "@/types/exam";
+import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
+import { reconcileGrading, reconcileMappings } from "./reconcile";
 import {
   ANSWER_EXTRACTION_PROMPT,
   QUESTION_EXTRACTION_PROMPT,
@@ -112,7 +114,11 @@ export async function extractQuestions(pages: SourcePage[]): Promise<Question[]>
     shape,
     pagesToContentParts(pages)
   );
-  return parsed.questions.map((q) => ({ id: crypto.randomUUID(), ...q }));
+  return parsed.questions.map((q) => ({
+    ...q,
+    id: crypto.randomUUID(),
+    box: sanitizeBoxes([q.box])[0] ?? null,
+  }));
 }
 
 export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {
@@ -122,7 +128,11 @@ export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]
     shape,
     pagesToContentParts(pages)
   );
-  return parsed.answers.map((a) => ({ id: crypto.randomUUID(), ...a }));
+  return parsed.answers.map((a) => ({
+    ...a,
+    id: crypto.randomUUID(),
+    boxes: normalizeAnswerBoxes(a.boxes),
+  }));
 }
 
 export async function mapAnswersToQuestions(
@@ -131,7 +141,7 @@ export async function mapAnswersToQuestions(
 ): Promise<Mapping[]> {
   const shape = `{"mappings": [{"questionId": string|null, "answerId": string|null, "status": "answered"|"unanswered"|"unmatched_answer", "confidence": 0-1, "reasoning": string}]}`;
   const parsed = await generateJson<{ mappings: Mapping[] }>(mappingPrompt(questions, answers), shape);
-  return parsed.mappings;
+  return reconcileMappings(questions, answers, parsed.mappings);
 }
 
 export async function gradeAnswers(
@@ -141,5 +151,5 @@ export async function gradeAnswers(
 ): Promise<GradingSummary> {
   const shape = `{"totalScore": number, "maxScore": number, "overallFeedback": string, "results": [{"questionId": string, "verdict": "correct"|"partially_correct"|"incorrect"|"ungraded", "score": number, "maxScore": number, "feedback": string}]}`;
   const prompt = gradingPrompt(byQuestionForGrading(questions, answers, mappings));
-  return generateJson<GradingSummary>(prompt, shape);
+  return reconcileGrading(questions, await generateJson<GradingSummary>(prompt, shape));
 }
