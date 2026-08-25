@@ -1,162 +1,164 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { AnswerSheetPanel } from "@/components/AnswerSheetPanel";
+import { QuestionCard } from "@/components/QuestionCard";
 import type { ExamSession } from "@/types/exam";
 
-/**
- * Functional placeholder for the question<->answer mapping + highlight view.
- * The Figma reference for this screen hasn't been provided yet, so this is
- * built for correctness of the core mechanic (click a question, see its
- * matched answer highlighted on the answer sheet) rather than final visual
- * polish — restyle once that screen comes in.
- */
 export default function ExamResultPage() {
   const { id } = useParams<{ id: string }>();
   const [session, setSession] = useState<ExamSession | null>(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<"questions" | "answers">("questions");
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   useEffect(() => {
     fetch(`/api/exam/${id}`)
       .then((r) => r.json())
-      .then(setSession);
+      .then((data: ExamSession) => {
+        setSession(data);
+        setSelectedQuestionId(data.questions[0]?.id ?? null);
+      });
   }, [id]);
+
+  const selectedMapping = session?.mappings.find((m) => m.questionId === selectedQuestionId);
+  const selectedAnswer =
+    session && selectedMapping?.answerId
+      ? session.answers.find((a) => a.id === selectedMapping.answerId)
+      : undefined;
+  const selectedQuestion = session?.questions.find((q) => q.id === selectedQuestionId);
+
+  const unmatchedAnswers = useMemo(
+    () => session?.mappings.filter((m) => m.status === "unmatched_answer") ?? [],
+    [session]
+  );
+
+  const allExpanded = session ? session.questions.every((q) => expandedIds.has(q.id)) : false;
+
+  function selectQuestion(questionId: string) {
+    setSelectedQuestionId(questionId);
+    const mapping = session?.mappings.find((m) => m.questionId === questionId);
+    const answer = mapping?.answerId ? session?.answers.find((a) => a.id === mapping.answerId) : undefined;
+    if (answer?.boxes.length) setCurrentPageIndex(answer.boxes[0].page);
+    setActiveTab("answers");
+  }
+
+  function toggleExpand(questionId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
+  }
+
+  function toggleExpandAll() {
+    if (!session) return;
+    setExpandedIds(allExpanded ? new Set() : new Set(session.questions.map((q) => q.id)));
+  }
 
   if (!session) {
     return (
-      <AppShell breadcrumb="Exams">
+      <AppShell breadcrumb="Exams" defaultCollapsed>
         <p className="p-8 text-neutral-500">Loading…</p>
       </AppShell>
     );
   }
 
-  const selectedMapping = session.mappings.find((m) => m.questionId === selectedQuestionId);
-  const selectedAnswer = selectedMapping?.answerId
-    ? session.answers.find((a) => a.id === selectedMapping.answerId)
-    : undefined;
-  const gradeForSelected = session.grading?.results.find((r) => r.questionId === selectedQuestionId);
+  const questionsPanel = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-semibold text-brand-dark">Extracted Questions (from question paper)</h2>
+        <button onClick={toggleExpandAll} className="text-sm font-medium text-brand-dark hover:underline">
+          {allExpanded ? "Collapse All" : "Expand All"}
+        </button>
+      </div>
 
-  const unmatchedAnswers = session.mappings.filter((m) => m.status === "unmatched_answer");
+      {session.questions.map((q) => (
+        <QuestionCard
+          key={q.id}
+          question={q}
+          mapping={session.mappings.find((m) => m.questionId === q.id)}
+          grade={session.grading?.results.find((r) => r.questionId === q.id)}
+          selected={q.id === selectedQuestionId}
+          expanded={expandedIds.has(q.id)}
+          onSelect={() => selectQuestion(q.id)}
+          onToggleExpand={() => toggleExpand(q.id)}
+        />
+      ))}
 
-  return (
-    <AppShell breadcrumb="Exams">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
-        {/* Questions column */}
-        <div className="flex flex-col gap-2 rounded-2xl bg-surface p-4">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-500">
-            Questions ({session.questions.length})
+      {unmatchedAnswers.length > 0 && (
+        <>
+          <h2 className="mt-2 px-1 text-sm font-semibold text-brand-dark">
+            Unmatched answers ({unmatchedAnswers.length})
           </h2>
-          {session.questions.map((q) => {
-            const mapping = session.mappings.find((m) => m.questionId === q.id);
-            const grade = session.grading?.results.find((r) => r.questionId === q.id);
-            const selected = q.id === selectedQuestionId;
+          {unmatchedAnswers.map((m) => {
+            const answer = session.answers.find((a) => a.id === m.answerId);
+            if (!answer) return null;
             return (
-              <button
-                key={q.id}
-                onClick={() => setSelectedQuestionId(q.id)}
-                className={`flex flex-col gap-1 rounded-xl border px-4 py-3 text-left transition-colors ${
-                  selected
-                    ? "border-brand-orange bg-brand-orange-soft/40"
-                    : "border-transparent bg-surface-muted hover:border-neutral-300"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-brand-dark">Q{q.number}</span>
-                  <StatusPill status={mapping?.status} />
-                </div>
-                <p className="line-clamp-2 text-xs text-neutral-500">{q.text}</p>
-                {grade && (
-                  <span className="text-xs font-medium text-brand-orange">
-                    {grade.score}/{grade.maxScore} · {grade.verdict.replace("_", " ")}
-                  </span>
-                )}
-              </button>
+              <div key={m.answerId} className="rounded-2xl bg-surface p-4">
+                <p className="text-sm text-neutral-500">
+                  {answer.declaredLabel ? `Labelled "${answer.declaredLabel}"` : "No label found"} — doesn&apos;t
+                  match any question on this paper.
+                </p>
+                <p className="mt-2 text-xs text-neutral-400 italic">&quot;{answer.transcript}&quot;</p>
+              </div>
             );
           })}
+        </>
+      )}
+    </div>
+  );
 
-          {unmatchedAnswers.length > 0 && (
-            <>
-              <h2 className="mt-4 mb-2 text-sm font-semibold text-neutral-500">
-                Unmatched answers ({unmatchedAnswers.length})
-              </h2>
-              {unmatchedAnswers.map((m) => {
-                const answer = session.answers.find((a) => a.id === m.answerId);
-                if (!answer) return null;
-                return (
-                  <div key={m.answerId} className="rounded-xl bg-surface-muted px-4 py-3">
-                    <p className="text-xs text-neutral-500">
-                      {answer.declaredLabel ? `Labelled "${answer.declaredLabel}"` : "No label found"} — doesn&apos;t
-                      match any question on this paper
-                    </p>
-                  </div>
-                );
-              })}
-            </>
-          )}
+  const answersPanel = (
+    <AnswerSheetPanel
+      pages={session.answerSheetPages}
+      currentPageIndex={currentPageIndex}
+      onPageChange={setCurrentPageIndex}
+      highlightBoxes={selectedAnswer?.boxes ?? []}
+      highlightLabel={selectedQuestion ? selectedQuestion.number : null}
+    />
+  );
+
+  return (
+    <AppShell breadcrumb="Exams" defaultCollapsed>
+      {session.grading && (
+        <div className="mb-4 flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
+          <span className="text-sm font-semibold text-brand-dark">Grading summary</span>
+          <span className="text-sm font-semibold text-brand-dark">
+            Total: {session.grading.totalScore}/{session.grading.maxScore}
+          </span>
         </div>
+      )}
 
-        {/* Answer sheet column */}
-        <div className="flex flex-col gap-4 rounded-2xl bg-surface p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-neutral-500">Answer sheet</h2>
-            {session.grading && (
-              <span className="text-sm font-semibold text-brand-dark">
-                Total: {session.grading.totalScore}/{session.grading.maxScore}
-              </span>
-            )}
-          </div>
+      {/* Mobile tab switcher */}
+      <div className="mb-4 flex rounded-full bg-surface-muted p-1 lg:hidden">
+        {(["questions", "answers"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 rounded-full py-2 text-sm font-semibold capitalize transition-colors ${
+              activeTab === tab ? "bg-brand-dark text-white" : "text-neutral-500"
+            }`}
+          >
+            {tab === "questions" ? "Questions" : "Answer Sheet"}
+          </button>
+        ))}
+      </div>
 
-          {selectedQuestionId && !selectedAnswer && (
-            <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-neutral-500">
-              This question was left unanswered.
-            </p>
-          )}
-
-          {gradeForSelected && (
-            <p className="rounded-xl bg-brand-orange-soft/40 px-4 py-3 text-sm text-brand-dark">
-              {gradeForSelected.feedback}
-            </p>
-          )}
-
-          <div className="flex flex-col gap-4">
-            {session.answerSheetPages.map((page) => (
-              <div key={page.pageIndex} className="relative w-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={page.dataUrl} alt={`Answer sheet page ${page.pageIndex + 1}`} className="w-full rounded-lg" />
-                {selectedAnswer?.boxes
-                  .filter((box) => box.page === page.pageIndex)
-                  .map((box, i) => (
-                    <div
-                      key={i}
-                      className="absolute rounded-md border-2 border-brand-orange bg-brand-orange/20"
-                      style={{
-                        top: `${box.yMin / 10}%`,
-                        left: `${box.xMin / 10}%`,
-                        width: `${(box.xMax - box.xMin) / 10}%`,
-                        height: `${(box.yMax - box.yMin) / 10}%`,
-                      }}
-                    />
-                  ))}
-              </div>
-            ))}
-          </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className={activeTab === "questions" ? "block" : "hidden lg:block"}>{questionsPanel}</div>
+        <div
+          className={`lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)] ${
+            activeTab === "answers" ? "block" : "hidden lg:block"
+          }`}
+        >
+          {answersPanel}
         </div>
       </div>
     </AppShell>
-  );
-}
-
-function StatusPill({ status }: { status?: string }) {
-  if (!status) return null;
-  const styles: Record<string, string> = {
-    answered: "bg-green-100 text-green-700",
-    unanswered: "bg-neutral-200 text-neutral-500",
-    unmatched_answer: "bg-yellow-100 text-yellow-700",
-  };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[status] ?? ""}`}>
-      {status.replace("_", " ")}
-    </span>
   );
 }

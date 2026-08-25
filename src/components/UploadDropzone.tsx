@@ -1,10 +1,16 @@
 "use client";
 
-import { CheckCircle2, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { FileText, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { getPageCount } from "@/lib/rasterize";
 
 const ACCEPTED_TYPES = "application/pdf,image/png,image/jpeg,image/webp";
 const MAX_SIZE_MB = 10;
+
+function formatSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(mb < 10 ? 1 : 0)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+}
 
 export function UploadDropzone({
   label,
@@ -18,6 +24,19 @@ export function UploadDropzone({
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [pageCountEntry, setPageCountEntry] = useState<{ file: File; count: number } | null>(null);
+  const pageCount = pageCountEntry?.file === file ? pageCountEntry.count : null;
+
+  useEffect(() => {
+    if (!file) return;
+    let cancelled = false;
+    getPageCount(file).then((count) => {
+      if (!cancelled) setPageCountEntry({ file, count });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   function acceptFile(candidate: File | undefined) {
     if (!candidate) return;
@@ -55,11 +74,17 @@ export function UploadDropzone({
       />
 
       {file ? (
-        <>
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-muted text-brand-orange">
-            <CheckCircle2 className="h-6 w-6" />
+        <div className="relative flex w-full max-w-sm items-center gap-3 rounded-xl bg-surface-muted px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500 text-white">
+            <FileText className="h-5 w-5" />
           </div>
-          <p className="max-w-full truncate px-4 text-sm font-medium text-brand-dark">{file.name}</p>
+          <div className="min-w-0 text-left">
+            <p className="truncate text-sm font-semibold text-brand-dark">{file.name}</p>
+            <p className="text-xs text-neutral-400">
+              {formatSize(file.size)}
+              {pageCount !== null && ` · ${pageCount} Page${pageCount === 1 ? "" : "s"}`}
+            </p>
+          </div>
           <button
             type="button"
             onClick={(e) => {
@@ -67,12 +92,12 @@ export function UploadDropzone({
               onChange(null);
               setError(null);
             }}
-            className="flex items-center gap-1 text-xs text-neutral-500 hover:text-brand-orange"
+            className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-brand-dark text-white"
+            aria-label="Remove file"
           >
             <X className="h-3.5 w-3.5" />
-            Remove
           </button>
-        </>
+        </div>
       ) : (
         <>
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-muted">

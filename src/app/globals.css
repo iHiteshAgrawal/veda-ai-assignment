@@ -13,6 +13,17 @@
   --brand-orange-soft: #f4e4da;
   --brand-dark: #2b2b2b;
   --brand-disabled: #cbc9c9;
+
+  /* Sampled from the Question <-> Answer mapping screen export */
+  --panel-dark: #303030; /* Answer Sheet header bar, collapsed sidebar rail */
+  --panel-dark-soft: #454545; /* zoom/pager pill controls inside the dark header */
+  --badge-neutral: #555555; /* unselected question number badge */
+  --success: #34ac15; /* full-score pill text, matched-answer highlight + tag */
+  --success-soft: #ecf8ea;
+  --danger: #c0350a; /* zero-score pill text */
+  --danger-soft: #ffe9e2;
+  --warning: #e3600f; /* partial-score pill text */
+  --warning-soft: #fff5e6;
 }
 
 @theme inline {
@@ -25,6 +36,15 @@
   --color-brand-orange-soft: var(--brand-orange-soft);
   --color-brand-dark: var(--brand-dark);
   --color-brand-disabled: var(--brand-disabled);
+  --color-panel-dark: var(--panel-dark);
+  --color-panel-dark-soft: var(--panel-dark-soft);
+  --color-badge-neutral: var(--badge-neutral);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

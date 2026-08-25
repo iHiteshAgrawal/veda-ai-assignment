@@ -63,6 +63,14 @@ export default function UploadPage() {
     }
   }
 
+  if (isProcessing) {
+    return (
+      <AppShell breadcrumb="Exams">
+        <ProcessingProgress stage={stage} />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell breadcrumb="Exams">
       <div className="flex flex-col items-center gap-8 py-6 text-center lg:py-10">
@@ -78,48 +86,40 @@ export default function UploadPage() {
 
         <MascotAvatar />
 
-        {isProcessing || stage === "error" ? (
-          <div className="w-full">
-            {stage === "error" ? (
-              <div className="mx-auto max-w-md rounded-2xl bg-surface p-6 text-center">
-                <p className="text-sm font-medium text-red-500">{error}</p>
-                <button
-                  onClick={() => setStage("idle")}
-                  className="mt-4 text-sm font-medium text-brand-orange hover:underline"
-                >
-                  Try again
-                </button>
-              </div>
-            ) : (
-              <ProcessingProgress stage={stage} />
-            )}
+        {stage === "error" && (
+          <div className="mx-auto max-w-md rounded-2xl bg-danger-soft p-6 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <button
+              onClick={() => setStage("idle")}
+              className="mt-4 text-sm font-medium text-brand-orange hover:underline"
+            >
+              Try again
+            </button>
           </div>
-        ) : (
-          <>
-            <div className="flex w-full max-w-3xl flex-col gap-4 sm:flex-row">
-              <UploadDropzone label="Question Paper" file={questionPaperFile} onChange={setQuestionPaperFile} />
-              <UploadDropzone label="Answer Sheet" file={answerSheetFile} onChange={setAnswerSheetFile} />
-            </div>
-
-            <div>
-              <button
-                disabled={!canStart}
-                onClick={handleStartMapping}
-                className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${
-                  canStart
-                    ? "bg-brand-orange text-white hover:bg-brand-orange/90"
-                    : "cursor-not-allowed bg-brand-disabled text-white/80"
-                }`}
-              >
-                Start Mapping
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <p className="mt-3 text-xs text-neutral-400">
-                Once both files are uploaded, you&apos;ll be able to map answers with questions
-              </p>
-            </div>
-          </>
         )}
+
+        <div className="flex w-full max-w-3xl flex-col gap-4 sm:flex-row">
+          <UploadDropzone label="Question Paper" file={questionPaperFile} onChange={setQuestionPaperFile} />
+          <UploadDropzone label="Answer Sheet" file={answerSheetFile} onChange={setAnswerSheetFile} />
+        </div>
+
+        <div>
+          <button
+            disabled={!canStart}
+            onClick={handleStartMapping}
+            className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${
+              canStart
+                ? "bg-brand-dark text-white hover:bg-black"
+                : "cursor-not-allowed bg-brand-disabled text-white/80"
+            }`}
+          >
+            Start Mapping
+            <ArrowRight className="h-4 w-4" />
+          </button>
+          <p className="mt-3 text-xs text-neutral-400">
+            Once both files are uploaded, you&apos;ll be able to map answers with questions
+          </p>
+        </div>
       </div>
     </AppShell>
   );

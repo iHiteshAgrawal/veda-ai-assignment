@@ -7,7 +7,7 @@ import type {
   SourcePage,
 } from "@/types/exam";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.6-flash";
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {

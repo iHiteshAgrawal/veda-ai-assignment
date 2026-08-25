@@ -1,37 +1,20 @@
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { PipelineStage } from "@/types/exam";
 
-const STEPS: { key: PipelineStage; label: string }[] = [
-  { key: "uploading", label: "Uploading files" },
-  { key: "extracting_questions", label: "Extracting questions from the question paper" },
-  { key: "extracting_answers", label: "Extracting answers from the answer sheet" },
-  { key: "mapping", label: "Mapping answers to questions" },
-  { key: "grading", label: "Grading & generating feedback" },
-];
+const STAGE_LABEL: Partial<Record<PipelineStage, string>> = {
+  uploading: "Uploading...",
+  extracting_questions: "Extracting...",
+  extracting_answers: "Extracting...",
+  mapping: "Mapping...",
+  grading: "Grading...",
+};
 
 export function ProcessingProgress({ stage }: { stage: PipelineStage }) {
-  const currentIndex = STEPS.findIndex((s) => s.key === stage);
-
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-3 rounded-2xl bg-surface p-6">
-      {STEPS.map((step, i) => {
-        const done = currentIndex > i || stage === "done";
-        const active = i === currentIndex && stage !== "done";
-        return (
-          <div key={step.key} className="flex items-center gap-3">
-            {done ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-orange" />
-            ) : active ? (
-              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-brand-orange" />
-            ) : (
-              <div className="h-5 w-5 shrink-0 rounded-full border-2 border-neutral-200" />
-            )}
-            <span className={`text-sm ${done || active ? "text-brand-dark" : "text-neutral-400"}`}>
-              {step.label}
-            </span>
-          </div>
-        );
-      })}
+    <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-4 rounded-2xl bg-surface">
+      <Sparkles className="h-16 w-16 text-brand-orange" fill="currentColor" />
+      <h2 className="text-2xl font-bold text-brand-dark">{STAGE_LABEL[stage] ?? "Processing..."}</h2>
+      <p className="text-neutral-400">This may take a while</p>
     </div>
   );
 }

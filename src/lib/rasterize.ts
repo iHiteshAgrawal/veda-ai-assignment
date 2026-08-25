@@ -104,6 +104,17 @@ async function rasterizeImage(file: File): Promise<SourcePage[]> {
   ];
 }
 
+/** Cheap page-count lookup for the upload chip UI — doesn't rasterize anything. */
+export async function getPageCount(file: File): Promise<number> {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    const pdfjs = await getPdfjs();
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+    return pdf.numPages;
+  }
+  return 1;
+}
+
 export async function rasterizeFile(file: File): Promise<SourcePage[]> {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
     return rasterizePdf(file);
