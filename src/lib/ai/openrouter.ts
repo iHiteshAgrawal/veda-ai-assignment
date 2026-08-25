@@ -15,9 +15,12 @@ import {
 
 // OpenRouter is a credits-billed alternative to Gemini's free tier — switch
 // to it (AI_PROVIDER=openrouter) if Gemini's daily quota runs out. Model is
-// overridable via OPENROUTER_MODEL; defaults to a cheap, reliable, non-Google
-// model so an outage/quota issue on Google's side doesn't take down both.
-const MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+// overridable via OPENROUTER_MODEL. Defaults to the same model family as the
+// primary provider (billed through OpenRouter's own arrangement with Google,
+// on entirely separate infrastructure/quota from GEMINI_API_KEY) because
+// non-grounding-specialized models (tested: gpt-4o-mini) produced visibly
+// worse bounding boxes for the answer-highlight overlay.
+const MODEL = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash-lite";
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 function getApiKey(): string {
