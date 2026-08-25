@@ -6,23 +6,10 @@
  * and get back pixel-mappable bounding boxes for the highlight overlay.
  */
 import type { SourcePage } from "@/types/exam";
+import { getPdfjs, isPdf } from "./pdfjs";
 
 const MAX_DIMENSION = 1600; // keep page images well under Gemini's inline-image size limits
 const JPEG_QUALITY = 0.85;
-
-let pdfjsLibPromise: Promise<typeof import("pdfjs-dist")> | null = null;
-
-async function getPdfjs() {
-  if (!pdfjsLibPromise) {
-    pdfjsLibPromise = import("pdfjs-dist").then((lib) => {
-      // Match the worker version to the installed package via CDN to avoid
-      // bundler/asset-path headaches with pdf.js's worker file.
-      lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${lib.version}/pdf.worker.min.mjs`;
-      return lib;
-    });
-  }
-  return pdfjsLibPromise;
-}
 
 function canvasToJpegDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
@@ -106,7 +93,7 @@ async function rasterizeImage(file: File): Promise<SourcePage[]> {
 
 /** Cheap page-count lookup for the upload chip UI — doesn't rasterize anything. */
 export async function getPageCount(file: File): Promise<number> {
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+  if (isPdf(file)) {
     const pdfjs = await getPdfjs();
     const buffer = await file.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data: buffer }).promise;
@@ -116,7 +103,7 @@ export async function getPageCount(file: File): Promise<number> {
 }
 
 export async function rasterizeFile(file: File): Promise<SourcePage[]> {
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+  if (isPdf(file)) {
     return rasterizePdf(file);
   }
   if (file.type.startsWith("image/")) {

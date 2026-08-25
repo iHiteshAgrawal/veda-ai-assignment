@@ -1,4 +1,12 @@
-import type { AnswerBlock, GradingSummary, Mapping, Question, SourcePage } from "@/types/exam";
+import type {
+  AnswerBlock,
+  GradingSummary,
+  IndexedLine,
+  Mapping,
+  Question,
+  QuestionSelection,
+  SourcePage,
+} from "@/types/exam";
 import * as gemini from "./gemini";
 import * as openrouter from "./openrouter";
 
@@ -15,6 +23,10 @@ function currentProvider() {
 
 export function extractQuestions(pages: SourcePage[]): Promise<Question[]> {
   return currentProvider().extractQuestions(pages);
+}
+
+export function extractQuestionsFromLines(lines: IndexedLine[]): Promise<QuestionSelection[]> {
+  return currentProvider().extractQuestionsFromLines(lines);
 }
 
 export function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {

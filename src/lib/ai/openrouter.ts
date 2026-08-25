@@ -1,18 +1,23 @@
 import type {
   AnswerBlock,
   GradingSummary,
+  IndexedLine,
   Mapping,
   Question,
+  QuestionSelection,
   SourcePage,
 } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
-import { reconcileGrading, reconcileMappings } from "./reconcile";
+import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
+import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
+import { GRADING_BATCH_SIZE, GRADING_CONCURRENCY, PROVIDER_TIMEOUT_MS } from "./config";
 import {
   ANSWER_EXTRACTION_PROMPT,
   QUESTION_EXTRACTION_PROMPT,
   byQuestionForGrading,
   gradingPrompt,
   mappingPrompt,
+  questionsFromLinesPrompt,
 } from "./prompts";
 
 // OpenRouter is a credits-billed alternative to Gemini's free tier — switch
@@ -80,7 +85,7 @@ async function generateJson<T>(promptText: string, shapeDescription: string, ima
   ];
 
   const response = await withRetry(async () => {
-    const res = await fetch(ENDPOINT, {
+    const res = await withTimeout(fetch(ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${getApiKey()}`,
@@ -93,7 +98,7 @@ async function generateJson<T>(promptText: string, shapeDescription: string, ima
         messages: [{ role: "user", content }],
         response_format: { type: "json_object" },
       }),
-    });
+    }), PROVIDER_TIMEOUT_MS, "OpenRouter request");
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`OpenRouter request failed: ${res.status} ${body}`);
@@ -119,6 +124,20 @@ export async function extractQuestions(pages: SourcePage[]): Promise<Question[]>
     id: crypto.randomUUID(),
     box: sanitizeBoxes([q.box])[0] ?? null,
   }));
+}
+
+/**
+ * Text-only counterpart to extractQuestions, used when the question paper has a
+ * real text layer. The model returns line IDs; the caller turns those into
+ * measured geometry, so no coordinate originates from the model.
+ */
+export async function extractQuestionsFromLines(lines: IndexedLine[]): Promise<QuestionSelection[]> {
+  const shape = `{"questions": [{"number": string, "parentNumber": string|null, "text": string, "lineIds": number[]}]}`;
+  const parsed = await generateJson<{ questions: QuestionSelection[] }>(
+    questionsFromLinesPrompt(lines),
+    shape
+  );
+  return parsed.questions ?? [];
 }
 
 export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {
@@ -150,6 +169,12 @@ export async function gradeAnswers(
   mappings: Mapping[]
 ): Promise<GradingSummary> {
   const shape = `{"totalScore": number, "maxScore": number, "overallFeedback": string, "results": [{"questionId": string, "verdict": "correct"|"partially_correct"|"incorrect"|"ungraded", "score": number, "maxScore": number, "feedback": string}]}`;
-  const prompt = gradingPrompt(byQuestionForGrading(questions, answers, mappings));
-  return reconcileGrading(questions, await generateJson<GradingSummary>(prompt, shape));
+  // Batched for the same reasons as the Gemini provider: better per-question
+  // attention, no truncation on long papers, and independent batches overlap.
+  const batches = chunk(byQuestionForGrading(questions, answers, mappings), GRADING_BATCH_SIZE);
+  const graded = await mapWithConcurrency(batches, GRADING_CONCURRENCY, (batch) =>
+    generateJson<GradingSummary>(gradingPrompt(batch), shape)
+  );
+
+  return reconcileGrading(questions, mergeGradingBatches(graded));
 }

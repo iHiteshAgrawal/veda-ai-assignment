@@ -3,8 +3,7 @@ import type { PipelineStage } from "@/types/exam";
 
 const STAGE_LABEL: Partial<Record<PipelineStage, string>> = {
   uploading: "Uploading...",
-  extracting_questions: "Extracting...",
-  extracting_answers: "Extracting...",
+  extracting: "Extracting...",
   mapping: "Mapping...",
   grading: "Grading...",
 };

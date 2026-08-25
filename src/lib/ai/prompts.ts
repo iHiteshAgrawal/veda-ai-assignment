@@ -4,7 +4,30 @@
  * output shape in whatever mechanism it natively supports (Gemini's typed
  * responseSchema vs. a plain-JSON-object instruction for others).
  */
-import type { AnswerBlock, Mapping, Question } from "@/types/exam";
+import type { AnswerBlock, IndexedLine, Mapping, Question } from "@/types/exam";
+
+/**
+ * Used when the document has a real text layer, so geometry is already known.
+ * The model never sees the page image and never emits a coordinate — it groups
+ * pre-measured lines by ID, and we union those lines' real boxes afterwards.
+ */
+export function questionsFromLinesPrompt(lines: readonly IndexedLine[]): string {
+  return `Below are the text lines of an exam question paper, in printed order, each with a stable numeric id.
+
+${lines.map((l) => `${l.id}: ${l.text}`).join("\n")}
+
+Group these lines into exam questions.
+
+Rules:
+- Return every question in printed order.
+- Treat labelled sub-parts as SEPARATE entries. If question 11 has parts (a) and (b), emit two
+  entries, "11(a)" and "11(b)", both with parentNumber "11". Otherwise parentNumber is null.
+- Preserve the printed numbering exactly (roman numerals, letters, etc.).
+- lineIds must list every line belonging to that question, including continuation lines where
+  the question text wraps. Use only ids from the list above; never invent one.
+- Ignore lines that are not part of a question (titles, headers, page numbers, instructions).
+- text is the question's wording with its number/label stripped off.`;
+}
 
 export const QUESTION_EXTRACTION_PROMPT = `You are extracting questions from a scanned/photographed exam question paper.
 The pages are provided in printed order, each preceded by "Page index N:".

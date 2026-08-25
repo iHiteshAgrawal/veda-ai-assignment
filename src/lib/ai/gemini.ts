@@ -2,18 +2,23 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type {
   AnswerBlock,
   GradingSummary,
+  IndexedLine,
   Mapping,
   Question,
+  QuestionSelection,
   SourcePage,
 } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
-import { reconcileGrading, reconcileMappings } from "./reconcile";
+import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
+import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
+import { GRADING_BATCH_SIZE, GRADING_CONCURRENCY, PROVIDER_TIMEOUT_MS } from "./config";
 import {
   ANSWER_EXTRACTION_PROMPT,
   QUESTION_EXTRACTION_PROMPT,
   byQuestionForGrading,
   gradingPrompt,
   mappingPrompt,
+  questionsFromLinesPrompt,
 } from "./prompts";
 
 // Not the cheaper gemini-flash-lite-latest: that model ignored the required
@@ -67,11 +72,15 @@ type Part = { text: string } | { inlineData: { mimeType: string; data: string } 
 
 async function generateJson<T>(parts: Part[], schema: object): Promise<T> {
   const response = await withRetry(() =>
-    getClient().models.generateContent({
-      model: MODEL,
-      contents: [{ role: "user", parts }],
-      config: { responseMimeType: "application/json", responseSchema: schema },
-    })
+    withTimeout(
+      getClient().models.generateContent({
+        model: MODEL,
+        contents: [{ role: "user", parts }],
+        config: { responseMimeType: "application/json", responseSchema: schema },
+      }),
+      PROVIDER_TIMEOUT_MS,
+      "Gemini request"
+    )
   );
   return JSON.parse(response.text ?? "{}") as T;
 }
@@ -135,6 +144,39 @@ export async function extractQuestions(pages: SourcePage[]): Promise<Question[]>
     id: crypto.randomUUID(),
     box: sanitizeBoxes([q.box])[0] ?? null,
   }));
+}
+
+/**
+ * Text-only counterpart to extractQuestions, used when the question paper has a
+ * real text layer. Cheaper and faster than the vision call, and the geometry it
+ * yields is measured rather than estimated — the model only returns line IDs.
+ */
+export async function extractQuestionsFromLines(lines: IndexedLine[]): Promise<QuestionSelection[]> {
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      questions: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            number: { type: Type.STRING },
+            parentNumber: { type: Type.STRING, nullable: true },
+            text: { type: Type.STRING },
+            lineIds: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+          },
+          required: ["number", "parentNumber", "text", "lineIds"],
+        },
+      },
+    },
+    required: ["questions"],
+  };
+
+  const parsed = await generateJson<{ questions: QuestionSelection[] }>(
+    [{ text: questionsFromLinesPrompt(lines) }],
+    schema
+  );
+  return parsed.questions ?? [];
 }
 
 export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {
@@ -238,6 +280,14 @@ export async function gradeAnswers(
     required: ["totalScore", "maxScore", "overallFeedback", "results"],
   };
 
-  const prompt = gradingPrompt(byQuestionForGrading(questions, answers, mappings));
-  return reconcileGrading(questions, await generateJson<GradingSummary>([{ text: prompt }], schema));
+  // Graded in batches rather than one giant call: a long paper in a single
+  // request degrades per-question attention and risks truncation, and batching
+  // lets independent batches run concurrently. Concurrency stays capped so the
+  // fan-out doesn't trip the provider's per-minute limit.
+  const batches = chunk(byQuestionForGrading(questions, answers, mappings), GRADING_BATCH_SIZE);
+  const graded = await mapWithConcurrency(batches, GRADING_CONCURRENCY, (batch) =>
+    generateJson<GradingSummary>([{ text: gradingPrompt(batch) }], schema)
+  );
+
+  return reconcileGrading(questions, mergeGradingBatches(graded));
 }

@@ -88,3 +88,18 @@ export function reconcileGrading(questions: Question[], grading: GradingSummary)
     maxScore: results.reduce((sum, r) => sum + (Number(r.maxScore) || 0), 0),
   };
 }
+
+/**
+ * Folds per-batch grading responses into one summary. Totals are deliberately
+ * left at zero here — `reconcileGrading` recomputes them from the merged
+ * results, so no batch's own arithmetic leaks into the final figure.
+ */
+export function mergeGradingBatches(batches: GradingSummary[]): GradingSummary {
+  const results = batches.flatMap((b) => b.results ?? []);
+  const overallFeedback = batches
+    .map((b) => b.overallFeedback?.trim())
+    .filter((text): text is string => Boolean(text))
+    .join(" ");
+
+  return { totalScore: 0, maxScore: 0, overallFeedback, results };
+}

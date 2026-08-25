@@ -8,19 +8,8 @@ import { AppShell } from "@/components/AppShell";
 import { MascotAvatar } from "@/components/MascotAvatar";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { UploadDropzone } from "@/components/UploadDropzone";
-import { rasterizeFile } from "@/lib/rasterize";
-import type { AnswerBlock, ExamSession, Mapping, PipelineStage, Question } from "@/types/exam";
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Request failed");
-  return data;
-}
+import { runPipeline } from "@/lib/pipeline";
+import type { PipelineStage } from "@/types/exam";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -36,47 +25,7 @@ export default function UploadPage() {
     if (!questionPaperFile || !answerSheetFile) return;
     setError(null);
     try {
-      setStage("uploading");
-      const [questionPaperPages, answerSheetPages] = await Promise.all([
-        rasterizeFile(questionPaperFile),
-        rasterizeFile(answerSheetFile),
-      ]);
-
-      setStage("extracting_questions");
-      const { questions } = await postJson<{ questions: Question[] }>("/api/extract-questions", {
-        pages: questionPaperPages,
-      });
-
-      setStage("extracting_answers");
-      const { answers } = await postJson<{ answers: AnswerBlock[] }>("/api/extract-answers", {
-        pages: answerSheetPages,
-      });
-
-      setStage("mapping");
-      const { mappings } = await postJson<{ mappings: Mapping[] }>("/api/map-answers", {
-        questions,
-        answers,
-      });
-
-      setStage("grading");
-      const { grading } = await postJson<{ grading: ExamSession["grading"] }>("/api/grade", {
-        questions,
-        answers,
-        mappings,
-      });
-
-      const session: ExamSession = {
-        id: crypto.randomUUID(),
-        createdAt: Date.now(),
-        stage: "done",
-        error: null,
-        questionPaperPages,
-        answerSheetPages,
-        questions,
-        answers,
-        mappings,
-        grading,
-      };
+      const session = await runPipeline(questionPaperFile, answerSheetFile, { onStage: setStage });
 
       // Held in the browser's IndexedDB rather than server memory — a serverless
       // deployment has no single long-lived process for a Map to survive in,
@@ -84,7 +33,6 @@ export default function UploadPage() {
       // tab that ran the upload is the only place this data needs to live.
       await set(session.id, session);
 
-      setStage("done");
       router.push(`/exam/${session.id}`);
     } catch (err) {
       setStage("error");
