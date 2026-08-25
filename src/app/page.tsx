@@ -1,5 +1,6 @@
 "use client";
 
+import { set } from "idb-keyval";
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,7 +9,18 @@ import { MascotAvatar } from "@/components/MascotAvatar";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { UploadDropzone } from "@/components/UploadDropzone";
 import { rasterizeFile } from "@/lib/rasterize";
-import type { PipelineStage } from "@/types/exam";
+import type { AnswerBlock, ExamSession, Mapping, PipelineStage, Question } from "@/types/exam";
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Request failed");
+  return data;
+}
 
 export default function UploadPage() {
   const router = useRouter();
@@ -25,38 +37,55 @@ export default function UploadPage() {
     setError(null);
     try {
       setStage("uploading");
-      const [{ id }, questionPaperPages, answerSheetPages] = await Promise.all([
-        fetch("/api/exam", { method: "POST" }).then((r) => r.json()),
+      const [questionPaperPages, answerSheetPages] = await Promise.all([
         rasterizeFile(questionPaperFile),
         rasterizeFile(answerSheetFile),
       ]);
 
       setStage("extracting_questions");
-      const qRes = await fetch(`/api/exam/${id}/questions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pages: questionPaperPages }),
+      const { questions } = await postJson<{ questions: Question[] }>("/api/extract-questions", {
+        pages: questionPaperPages,
       });
-      if (!qRes.ok) throw new Error((await qRes.json()).error ?? "Question extraction failed");
 
       setStage("extracting_answers");
-      const aRes = await fetch(`/api/exam/${id}/answers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pages: answerSheetPages }),
+      const { answers } = await postJson<{ answers: AnswerBlock[] }>("/api/extract-answers", {
+        pages: answerSheetPages,
       });
-      if (!aRes.ok) throw new Error((await aRes.json()).error ?? "Answer extraction failed");
 
       setStage("mapping");
-      const mRes = await fetch(`/api/exam/${id}/map`, { method: "POST" });
-      if (!mRes.ok) throw new Error((await mRes.json()).error ?? "Answer mapping failed");
+      const { mappings } = await postJson<{ mappings: Mapping[] }>("/api/map-answers", {
+        questions,
+        answers,
+      });
 
       setStage("grading");
-      const gRes = await fetch(`/api/exam/${id}/grade`, { method: "POST" });
-      if (!gRes.ok) throw new Error((await gRes.json()).error ?? "Grading failed");
+      const { grading } = await postJson<{ grading: ExamSession["grading"] }>("/api/grade", {
+        questions,
+        answers,
+        mappings,
+      });
+
+      const session: ExamSession = {
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        stage: "done",
+        error: null,
+        questionPaperPages,
+        answerSheetPages,
+        questions,
+        answers,
+        mappings,
+        grading,
+      };
+
+      // Held in the browser's IndexedDB rather than server memory — a serverless
+      // deployment has no single long-lived process for a Map to survive in,
+      // so cross-request server-side state isn't reliable there. The browser
+      // tab that ran the upload is the only place this data needs to live.
+      await set(session.id, session);
 
       setStage("done");
-      router.push(`/exam/${id}`);
+      router.push(`/exam/${session.id}`);
     } catch (err) {
       setStage("error");
       setError(err instanceof Error ? err.message : "Something went wrong");

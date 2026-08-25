@@ -1,5 +1,7 @@
 "use client";
 
+import { get } from "idb-keyval";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
@@ -10,18 +12,23 @@ import type { ExamSession } from "@/types/exam";
 export default function ExamResultPage() {
   const { id } = useParams<{ id: string }>();
   const [session, setSession] = useState<ExamSession | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"questions" | "answers">("questions");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   useEffect(() => {
-    fetch(`/api/exam/${id}`)
-      .then((r) => r.json())
-      .then((data: ExamSession) => {
-        setSession(data);
-        setSelectedQuestionId(data.questions[0]?.id ?? null);
-      });
+    // Results live in this browser's IndexedDB, not on the server — see the
+    // comment in page.tsx's handleStartMapping for why.
+    get<ExamSession>(id).then((data) => {
+      if (!data) {
+        setNotFound(true);
+        return;
+      }
+      setSession(data);
+      setSelectedQuestionId(data.questions[0]?.id ?? null);
+    });
   }, [id]);
 
   const selectedMapping = session?.mappings.find((m) => m.questionId === selectedQuestionId);
@@ -58,6 +65,23 @@ export default function ExamResultPage() {
   function toggleExpandAll() {
     if (!session) return;
     setExpandedIds(allExpanded ? new Set() : new Set(session.questions.map((q) => q.id)));
+  }
+
+  if (notFound) {
+    return (
+      <AppShell breadcrumb="Exams" defaultCollapsed>
+        <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-2xl bg-surface p-8 text-center">
+          <p className="font-semibold text-brand-dark">No results found for this link</p>
+          <p className="text-sm text-neutral-500">
+            Results are stored in this browser only. This can happen if you opened the link in a
+            different browser, cleared site data, or the upload never finished.
+          </p>
+          <Link href="/" className="text-sm font-medium text-brand-orange hover:underline">
+            Upload a question paper &amp; answer sheet
+          </Link>
+        </div>
+      </AppShell>
+    );
   }
 
   if (!session) {
