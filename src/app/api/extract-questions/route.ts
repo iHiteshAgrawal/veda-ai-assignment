@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { extractQuestions } from "@/lib/gemini";
+import { extractQuestions, toFriendlyError } from "@/lib/ai";
 import type { SourcePage } from "@/types/exam";
 
 export async function POST(request: Request) {
@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     const questions = await extractQuestions(pages);
     return NextResponse.json({ questions });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Question extraction failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: toFriendlyError(error, "Question extraction failed") }, { status: 500 });
   }
 }

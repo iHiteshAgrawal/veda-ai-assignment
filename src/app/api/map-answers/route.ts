@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { mapAnswersToQuestions } from "@/lib/gemini";
+import { mapAnswersToQuestions, toFriendlyError } from "@/lib/ai";
 import type { AnswerBlock, Question } from "@/types/exam";
 
 export async function POST(request: Request) {
@@ -11,7 +11,6 @@ export async function POST(request: Request) {
     const mappings = await mapAnswersToQuestions(questions, answers);
     return NextResponse.json({ mappings });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Answer mapping failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: toFriendlyError(error, "Answer mapping failed") }, { status: 500 });
   }
 }
