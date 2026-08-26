@@ -167,9 +167,16 @@ export default function ExamResultPage() {
       {session.grading && (
         <div className="mb-4 flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
           <span className="text-sm font-semibold text-brand-dark">Grading summary</span>
-          <span className="text-sm font-semibold text-brand-dark">
-            Total: {session.grading.totalScore}/{session.grading.maxScore}
-          </span>
+          <div className="flex items-center gap-3">
+            {session.answerGeometry === "measured" && (
+              <span className="rounded-full bg-success-soft px-3 py-1 text-xs font-semibold text-success">
+                OCR-measured highlights
+              </span>
+            )}
+            <span className="text-sm font-semibold text-brand-dark">
+              Total: {session.grading.totalScore}/{session.grading.maxScore}
+            </span>
+          </div>
         </div>
       )}
 

@@ -15,6 +15,8 @@
 import type { IndexedLine, LineIndex, NormalizedBox } from "@/types/exam";
 import { getPdfjs, isPdf } from "./pdfjs";
 
+export { boxesForLineIds } from "./line-index";
+
 /** Two glyph runs belong to the same visual line if their baselines differ by less than this fraction of page height. */
 const LINE_MERGE_TOLERANCE = 0.006;
 
@@ -145,30 +147,4 @@ export async function extractLineIndex(file: File): Promise<LineIndex | null> {
 
   if (totalChars < MIN_CHARS_PER_PAGE * pdf.numPages) return null;
   return { lines, pageCount: pdf.numPages };
-}
-
-/** Union of the boxes for the given line IDs, one box per page the lines span. */
-export function boxesForLineIds(index: LineIndex, lineIds: readonly number[]): NormalizedBox[] {
-  const byId = new Map(index.lines.map((line) => [line.id, line]));
-  const byPage = new Map<number, NormalizedBox>();
-
-  for (const id of lineIds) {
-    const line = byId.get(id);
-    if (!line) continue; // model named a line that doesn't exist — skip rather than guess
-    const existing = byPage.get(line.box.page);
-    byPage.set(
-      line.box.page,
-      existing
-        ? {
-            page: line.box.page,
-            xMin: Math.min(existing.xMin, line.box.xMin),
-            xMax: Math.max(existing.xMax, line.box.xMax),
-            yMin: Math.min(existing.yMin, line.box.yMin),
-            yMax: Math.max(existing.yMax, line.box.yMax),
-          }
-        : line.box
-    );
-  }
-
-  return [...byPage.values()].sort((a, b) => a.page - b.page);
 }

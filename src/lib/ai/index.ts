@@ -1,5 +1,7 @@
 import type {
   AnswerBlock,
+  AnswerSelection,
+  LineIndex,
   GradingSummary,
   IndexedLine,
   Mapping,
@@ -31,6 +33,13 @@ export function extractQuestionsFromLines(lines: IndexedLine[]): Promise<Questio
 
 export function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]> {
   return currentProvider().extractAnswers(pages);
+}
+
+export function extractAnswersFromLines(
+  pages: SourcePage[],
+  index: LineIndex
+): Promise<AnswerSelection[]> {
+  return currentProvider().extractAnswersFromLines(pages, index);
 }
 
 export function mapAnswersToQuestions(questions: Question[], answers: AnswerBlock[]): Promise<Mapping[]> {

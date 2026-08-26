@@ -5,6 +5,7 @@
  * responseSchema vs. a plain-JSON-object instruction for others).
  */
 import type { AnswerBlock, IndexedLine, Mapping, Question } from "@/types/exam";
+import { formatLineIndex } from "@/lib/line-index";
 
 /**
  * Used when the document has a real text layer, so geometry is already known.
@@ -104,4 +105,33 @@ export function byQuestionForGrading(
     const answer = mapping?.answerId ? answers.find((a) => a.id === mapping.answerId) : undefined;
     return { id: q.id, number: q.number, question: q.text, studentAnswer: answer?.transcript ?? null };
   });
+}
+
+/**
+ * Used when an OCR engine has already measured where the ink is. The model
+ * still reads the handwriting from the page images — it transcribes better than
+ * the OCR engine does — but it reports *location* by naming line IDs from the
+ * measured index rather than emitting coordinates of its own.
+ */
+export function answersFromLinesPrompt(lines: readonly IndexedLine[]): string {
+  return `You are extracting a student's handwritten answers from the attached answer sheet pages.
+
+An OCR engine has already located every line of text on those pages. Its transcription is
+unreliable — trust your own reading of the images for the wording — but its line ids and
+positions are accurate.
+
+OCR line index:
+${formatLineIndex(lines)}
+
+Return one entry per distinct answer attempt, in the order they physically appear.
+
+Rules:
+- transcript: your own faithful reading of the handwriting from the image, NOT the OCR text.
+  The OCR text is often garbled (e.g. it may read "15 + 27 = 42" as "1527 42").
+- declaredLabel: the question number the student wrote beside the answer, verbatim, if legible
+  (e.g. "Q11 (a)"); null if none is written. Never guess a label that isn't on the page.
+- lineIds: every line id from the index that this answer's handwriting occupies, including the
+  line carrying its label and any continuation lines. Use only ids listed above; never invent one.
+- If one answer continues onto a later page, keep it as ONE entry whose lineIds span both pages.
+- Do not merge two separate answers into one entry.`;
 }

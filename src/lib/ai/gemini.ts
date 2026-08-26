@@ -8,6 +8,7 @@ import type {
   QuestionSelection,
   SourcePage,
 } from "@/types/exam";
+import type { AnswerSelection, LineIndex } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
 import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
 import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
@@ -18,6 +19,7 @@ import {
   byQuestionForGrading,
   gradingPrompt,
   mappingPrompt,
+  answersFromLinesPrompt,
   questionsFromLinesPrompt,
 } from "./prompts";
 
@@ -217,6 +219,42 @@ export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]
     id: crypto.randomUUID(),
     boxes: normalizeAnswerBoxes(a.boxes),
   }));
+}
+
+/**
+ * Answer extraction with measured geometry. The model still reads the
+ * handwriting from the page images — it transcribes better than the OCR engine
+ * — but returns location as line IDs from the measured index instead of
+ * coordinates of its own, so the resulting boxes are exact.
+ */
+export async function extractAnswersFromLines(
+  pages: SourcePage[],
+  index: LineIndex
+): Promise<AnswerSelection[]> {
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      answers: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            transcript: { type: Type.STRING },
+            declaredLabel: { type: Type.STRING, nullable: true },
+            lineIds: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+          },
+          required: ["transcript", "declaredLabel", "lineIds"],
+        },
+      },
+    },
+    required: ["answers"],
+  };
+
+  const parsed = await generateJson<{ answers: AnswerSelection[] }>(
+    [{ text: answersFromLinesPrompt(index.lines) }, ...pagesToParts(pages)],
+    schema
+  );
+  return parsed.answers ?? [];
 }
 
 export async function mapAnswersToQuestions(

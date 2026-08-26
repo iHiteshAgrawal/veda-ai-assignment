@@ -7,6 +7,7 @@ import type {
   QuestionSelection,
   SourcePage,
 } from "@/types/exam";
+import type { AnswerSelection, LineIndex } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
 import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
 import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
@@ -17,6 +18,7 @@ import {
   byQuestionForGrading,
   gradingPrompt,
   mappingPrompt,
+  answersFromLinesPrompt,
   questionsFromLinesPrompt,
 } from "./prompts";
 
@@ -152,6 +154,20 @@ export async function extractAnswers(pages: SourcePage[]): Promise<AnswerBlock[]
     id: crypto.randomUUID(),
     boxes: normalizeAnswerBoxes(a.boxes),
   }));
+}
+
+/** Answer extraction with measured geometry — see the Gemini provider for the rationale. */
+export async function extractAnswersFromLines(
+  pages: SourcePage[],
+  index: LineIndex
+): Promise<AnswerSelection[]> {
+  const shape = `{"answers": [{"transcript": string, "declaredLabel": string|null, "lineIds": number[]}]}`;
+  const parsed = await generateJson<{ answers: AnswerSelection[] }>(
+    answersFromLinesPrompt(index.lines),
+    shape,
+    pagesToContentParts(pages)
+  );
+  return parsed.answers ?? [];
 }
 
 export async function mapAnswersToQuestions(

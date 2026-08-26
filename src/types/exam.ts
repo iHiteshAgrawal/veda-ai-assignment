@@ -54,6 +54,17 @@ export interface QuestionSelection {
   lineIds: number[];
 }
 
+/**
+ * An answer described by which measured lines it occupies. The transcript is
+ * the model's own reading of the image (better than OCR); the location comes
+ * from line IDs, so the caller derives exact geometry.
+ */
+export interface AnswerSelection {
+  transcript: string;
+  declaredLabel: string | null;
+  lineIds: number[];
+}
+
 export interface Question {
   id: string;
   /** Printed numbering exactly as it appears, e.g. "11", "11(a)". */
@@ -127,6 +138,8 @@ export interface ExamSession {
    * between exact geometry and a model's best guess.
    */
   questionGeometry: "measured" | "estimated";
+  /** "measured" when answer boxes came from OCR word polygons rather than a model's estimate. */
+  answerGeometry: "measured" | "estimated";
   questionPaperPages: SourcePage[];
   answerSheetPages: SourcePage[];
   questions: Question[];

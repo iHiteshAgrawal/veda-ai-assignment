@@ -102,11 +102,16 @@ export async function runPipeline(
   // Both branches are independent of each other — the only join is the mapping
   // step below, so there's no reason to serialise them.
   onStage("extracting");
-  const [questionResult, { answers }] = await Promise.all([
+  const [questionResult, answerResult] = await Promise.all([
     extractQuestionsForFile(questionPaperFile, questionPaperPages, signal),
-    postJson<{ answers: AnswerBlock[] }>("/api/extract-answers", { pages: answerSheetPages }, signal),
+    postJson<{ answers: AnswerBlock[]; geometry: "measured" | "estimated" }>(
+      "/api/extract-answers",
+      { pages: answerSheetPages },
+      signal
+    ),
   ]);
   const { questions, geometry } = questionResult;
+  const answers = answerResult.answers;
 
   onStage("mapping");
   const { mappings } = await postJson<{ mappings: Mapping[] }>(
@@ -129,6 +134,7 @@ export async function runPipeline(
     stage: "done",
     error: null,
     questionGeometry: geometry,
+    answerGeometry: answerResult.geometry,
     questionPaperPages,
     answerSheetPages,
     questions,
