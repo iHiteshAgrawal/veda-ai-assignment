@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "2.18.0",

@@ -19,7 +19,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc --noEmit
+      # `next typegen` first: LayoutProps/PageProps are generated into
+      # .next/types by Next, so a bare `tsc` on a clean checkout can't see them.
+      - run: npm run typecheck
       - run: npm test
       # Build last: it's the slowest step, so failing lint/types/tests first
       # gives quicker feedback. No API keys needed — every provider call is
