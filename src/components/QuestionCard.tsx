@@ -33,8 +33,19 @@ export function QuestionCard({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
       onClick={onSelect}
-      className={`cursor-pointer rounded-2xl bg-surface p-4 transition-shadow ${
+      onKeyDown={(e) => {
+        // Selecting a question is the core interaction of this screen, so it
+        // has to work from the keyboard, not just the mouse.
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`cursor-pointer rounded-2xl bg-surface p-4 transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
         selected ? "ring-2 ring-brand-orange" : "hover:shadow-sm"
       }`}
     >

@@ -11,6 +11,7 @@ import type { AnswerSelection, LineIndex } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
 import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
 import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
+import { buildFriendlyError, withRateLimitRetry } from "./retry";
 import { GRADING_BATCH_SIZE, GRADING_CONCURRENCY, PROVIDER_TIMEOUT_MS } from "./config";
 import {
   ANSWER_EXTRACTION_PROMPT,
@@ -40,30 +41,9 @@ function getApiKey(): string {
   return apiKey;
 }
 
-function isRateLimitError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.includes('"code":429') || message.includes('"code": 429') || message.includes("rate limit");
-}
-
-/** Retries only transient rate-limit errors — anything else fails fast. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt === attempts || !isRateLimitError(err)) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
-    }
-  }
-  throw new Error("unreachable");
-}
-
-export function toFriendlyError(err: unknown, fallback: string): string {
-  if (isRateLimitError(err)) {
-    return "OpenRouter's rate limit was hit. Wait a minute and try again, or switch AI_PROVIDER back to gemini.";
-  }
-  return err instanceof Error ? err.message : fallback;
-}
+export const toFriendlyError = buildFriendlyError(
+  "OpenRouter's rate limit was hit. Wait a minute and try again, or switch AI_PROVIDER back to gemini."
+);
 
 type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
@@ -86,7 +66,7 @@ async function generateJson<T>(promptText: string, shapeDescription: string, ima
     ...images,
   ];
 
-  const response = await withRetry(async () => {
+  const response = await withRateLimitRetry(async () => {
     const res = await withTimeout(fetch(ENDPOINT, {
       method: "POST",
       headers: {

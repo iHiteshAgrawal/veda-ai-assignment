@@ -66,7 +66,7 @@ function toBase64(dataUrl: string): string {
   return match[1];
 }
 
-async function annotatePage(page: SourcePage): Promise<PositionedWord[] & { pageSize?: never }> {
+async function annotatePage(page: SourcePage): Promise<PositionedWord[]> {
   const apiKey = process.env.GOOGLE_VISION_API_KEY;
   if (!apiKey) throw new Error("GOOGLE_VISION_API_KEY is not set");
 
@@ -98,7 +98,7 @@ async function annotatePage(page: SourcePage): Promise<PositionedWord[] & { page
   if (result?.error) throw new Error(`Vision OCR: ${result.error.message ?? "unknown error"}`);
 
   const visionPage = result?.fullTextAnnotation?.pages?.[0];
-  if (!visionPage) return [] as unknown as PositionedWord[] & { pageSize?: never };
+  if (!visionPage) return [];
 
   // Vision reports its own page dimensions; prefer them over the caller's, since
   // the polygons are expressed in that coordinate space.
@@ -130,7 +130,7 @@ async function annotatePage(page: SourcePage): Promise<PositionedWord[] & { page
       }
     }
   }
-  return words as PositionedWord[] & { pageSize?: never };
+  return words;
 }
 
 /**

@@ -1,4 +1,12 @@
 import type { Mapping } from "@/types/exam";
+import { Pill, type PillTone } from "./ui/Pill";
+
+/** Full marks reads as success, zero as danger, anything between as partial. */
+function toneForScore(score: number, maxScore: number): PillTone {
+  if (score >= maxScore) return "success";
+  if (score <= 0) return "danger";
+  return "warning";
+}
 
 export function ScorePill({
   mapping,
@@ -9,32 +17,12 @@ export function ScorePill({
   score?: number;
   maxScore?: number;
 }) {
-  if (mapping?.status === "unanswered") {
-    return (
-      <span className="whitespace-nowrap rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-neutral-400">
-        Not answered
-      </span>
-    );
-  }
-
-  if (score === undefined || maxScore === undefined) {
-    return (
-      <span className="whitespace-nowrap rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-neutral-400">
-        Ungraded
-      </span>
-    );
-  }
-
-  const tone = score === maxScore ? "success" : score === 0 ? "danger" : "warning";
-  const styles = {
-    success: "bg-success-soft text-success",
-    danger: "bg-danger-soft text-danger",
-    warning: "bg-warning-soft text-warning",
-  } as const;
+  if (mapping?.status === "unanswered") return <Pill>Not answered</Pill>;
+  if (score === undefined || maxScore === undefined) return <Pill>Ungraded</Pill>;
 
   return (
-    <span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${styles[tone]}`}>
+    <Pill tone={toneForScore(score, maxScore)}>
       {score}/{maxScore}
-    </span>
+    </Pill>
   );
 }

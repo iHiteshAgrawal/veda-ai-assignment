@@ -3,7 +3,7 @@
 import { set } from "idb-keyval";
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MascotAvatar } from "@/components/MascotAvatar";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
@@ -21,11 +21,25 @@ export default function UploadPage() {
   const canStart = questionPaperFile && answerSheetFile && stage === "idle";
   const isProcessing = stage !== "idle" && stage !== "error";
 
+  // Abort in-flight work if the user leaves mid-run. Without this, closing the
+  // tab during a 15s pipeline leaves model calls running and billing against
+  // the quota for a result nobody will see.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   async function handleStartMapping() {
     if (!questionPaperFile || !answerSheetFile) return;
     setError(null);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const session = await runPipeline(questionPaperFile, answerSheetFile, { onStage: setStage });
+      const session = await runPipeline(questionPaperFile, answerSheetFile, {
+        onStage: setStage,
+        signal: controller.signal,
+      });
 
       // Held in the browser's IndexedDB rather than server memory — a serverless
       // deployment has no single long-lived process for a Map to survive in,
@@ -35,6 +49,8 @@ export default function UploadPage() {
 
       router.push(`/exam/${session.id}`);
     } catch (err) {
+      // An abort is the user leaving, not a failure worth reporting to them.
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setStage("error");
       setError(err instanceof Error ? err.message : "Something went wrong");
     }

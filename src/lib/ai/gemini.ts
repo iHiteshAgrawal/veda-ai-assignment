@@ -12,6 +12,7 @@ import type { AnswerSelection, LineIndex } from "@/types/exam";
 import { normalizeAnswerBoxes, sanitizeBoxes } from "@/lib/boxes";
 import { mergeGradingBatches, reconcileGrading, reconcileMappings } from "./reconcile";
 import { chunk, mapWithConcurrency, withTimeout } from "@/lib/async";
+import { buildFriendlyError, withRateLimitRetry } from "./retry";
 import { GRADING_BATCH_SIZE, GRADING_CONCURRENCY, PROVIDER_TIMEOUT_MS } from "./config";
 import {
   ANSWER_EXTRACTION_PROMPT,
@@ -44,36 +45,15 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-function isRateLimitError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.includes('"code":429') || message.includes("RESOURCE_EXHAUSTED");
-}
-
-/** Retries only transient rate-limit errors (free-tier per-minute caps) — anything else fails fast. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt === attempts || !isRateLimitError(err)) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
-    }
-  }
-  throw new Error("unreachable");
-}
-
-/** Turns the raw Gemini SDK error into something worth showing a teacher, without hiding real bugs. */
-export function toFriendlyError(err: unknown, fallback: string): string {
-  if (isRateLimitError(err)) {
-    return "The AI provider's free-tier rate limit was hit. Wait a minute and try again (check usage at https://ai.dev/rate-limit), or switch AI_PROVIDER to openrouter.";
-  }
-  return err instanceof Error ? err.message : fallback;
-}
+export const toFriendlyError = buildFriendlyError(
+  "The AI provider's free-tier rate limit was hit. Wait a minute and try again " +
+    "(check usage at https://ai.dev/rate-limit), or switch AI_PROVIDER to openrouter."
+);
 
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 async function generateJson<T>(parts: Part[], schema: object): Promise<T> {
-  const response = await withRetry(() =>
+  const response = await withRateLimitRetry(() =>
     withTimeout(
       getClient().models.generateContent({
         model: MODEL,
