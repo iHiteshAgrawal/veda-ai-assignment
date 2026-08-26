@@ -12,7 +12,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Read from .nvmrc so CI and local development can't drift. They did:
+          # npm 11 (Node 25) prunes cross-platform optional deps that npm 10
+          # (Node 22) keeps, producing a lock file that `npm ci` rejects on Linux.
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run lint
