@@ -74,7 +74,9 @@ export default function UploadPage() {
               Question Paper &amp; Answer Sheets
             </span>
           </h1>
-          <p className="mt-3 text-neutral-500">Upload both files to get started</p>
+          <p className="mt-3 text-neutral-500">
+            Upload both files to get started
+          </p>
         </div>
 
         <MascotAvatar />
@@ -92,11 +94,19 @@ export default function UploadPage() {
         )}
 
         <div className="flex w-full max-w-3xl flex-col gap-4 sm:flex-row">
-          <UploadDropzone label="Question Paper" file={questionPaperFile} onChange={setQuestionPaperFile} />
-          <UploadDropzone label="Answer Sheet" file={answerSheetFile} onChange={setAnswerSheetFile} />
+          <UploadDropzone
+            label="Question Paper"
+            file={questionPaperFile}
+            onChange={setQuestionPaperFile}
+          />
+          <UploadDropzone
+            label="Answer Sheet"
+            file={answerSheetFile}
+            onChange={setAnswerSheetFile}
+          />
         </div>
 
-        <div>
+        <div className="flex flex-col items-center">
           <button
             disabled={!canStart}
             onClick={handleStartMapping}
@@ -110,7 +120,8 @@ export default function UploadPage() {
             <ArrowRight className="h-4 w-4" />
           </button>
           <p className="mt-3 text-xs text-neutral-400">
-            Once both files are uploaded, you&apos;ll be able to map answers with questions
+            Once both files are uploaded, you&apos;ll be able to map answers
+            with questions
           </p>
         </div>
       </div>

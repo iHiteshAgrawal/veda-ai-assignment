@@ -5,7 +5,7 @@ question, transcribes the answers, works out which answer belongs to which quest
 them, and — when you click a question — highlights **exactly where on the sheet** that answer
 was written.
 
-- **Live demo:** _add your Vercel URL_
+- **Live demo:** https://veda-ai-three-bay.vercel.app/
 - **Repository:** https://github.com/iHiteshAgrawal/veda-ai
 
 ---
@@ -174,7 +174,7 @@ and falls back to model-estimated boxes rather than failing the upload. Degraded
 
 ## Tests
 
-37 unit tests over the pure logic, each pinned to a bug actually encountered — malformed boxes,
+47 unit tests over the pure logic, each pinned to a bug actually encountered — malformed boxes,
 cross-page merge behaviour, self-contradictory mappings, grading arithmetic, concurrency limits.
 CI runs lint, types, tests, and build on every push.
 
@@ -183,4 +183,5 @@ src/lib/boxes.test.ts          box validation, merging, page separation
 src/lib/async.test.ts          concurrency bounds, chunking, timeouts
 src/lib/text-layer.test.ts     line-ID to geometry resolution
 src/lib/ai/reconcile.test.ts   mapping invariants, grading totals
+src/lib/vision.test.ts         OCR line grouping, coordinate normalisation
 ```
